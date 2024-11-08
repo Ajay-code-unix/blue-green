@@ -2,7 +2,7 @@ version: '3'
 
 services:
   blue:
-    image: ajaybadrinath/bg:latest
+    image: "${IMAGE_TAG}"
     container_name: blue
     ports:
       - "3001:3000"
@@ -10,7 +10,7 @@ services:
       - ENVIRONMENT=blue
 
   green:
-    image: ajaybadrinath/bg:latest
+    image: "${IMAGE_TAG}"
     container_name: green
     ports:
       - "3002:3000"
