@@ -1,12 +1,6 @@
-const express=require('express');
-const app=express();
-app.use(express.json())
-const PORT= process.env.PORT || 3000;
-app.listen(PORT,()=>{
-	console.log("Server running on port:",PORT);
+const express=require('express')
+const app = express();
+const PORT=3000;
+app.get('/',(req,res)=> res.send('Hello bgnm'));
+app.listen(PORT,()=>console.log(`APP running on Port ${PORT}`));
 
-});
-app.get("/hello",(req,res,next)=>{
-	res.json({
-	"message":"helo"
-	})});
