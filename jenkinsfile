@@ -1,0 +1,81 @@
+pipeline {
+    agent any
+    stages {
+        stage('Clone Repository') {
+            steps {
+                checkout([$class: 'GitSCM', branches: [[name: '*/main']],
+                userRemoteConfigs: [[url: 'https://github.com/Ajay-code-unix/blue-green.git']]
+                ])
+            }
+        }
+        stage('Set IMAGE_TAG') {
+            steps {
+                script {
+                    // Set the IMAGE_TAG based on the current build number
+                    env.IMAGE_TAG = "ajaybadrinath/bg:${env.BUILD_NUMBER}"
+                    echo "Setting IMAGE_TAG to ${env.IMAGE_TAG}"
+                    
+                    // Explicitly convert BUILD_NUMBER to an integer and subtract 1 to get the previous tag
+                    def previousBuildNumber = (env.BUILD_NUMBER as Integer) - 1
+                    env.PREVIOUS_GREEN_IMAGE_TAG = "ajaybadrinath/bg:${previousBuildNumber}"
+                    echo "Previous Green IMAGE_TAG set to ${env.PREVIOUS_GREEN_IMAGE_TAG}"
+                }
+            }
+        }
+        stage('Build Docker Image') {
+            steps {
+                sh "docker build -t ${env.IMAGE_TAG} ."
+            }
+        }
+        stage('Push Docker Image') {
+            steps {
+                sh "echo 'ajay@2002' | docker login -u ajaybadrinath --password-stdin"
+                sh "docker push ${env.IMAGE_TAG}"
+            }
+        }
+        stage('Deploy to Blue Environment') {
+            steps {
+                script {
+                    sh 'docker compose stop blue || true'
+                    sh 'docker compose rm -f blue || true'
+                    sh "IMAGE_TAG=${env.IMAGE_TAG} docker compose -f docker-compose.blue.yml up -d blue"
+                    env.BLUE_IMAGE_TAG = env.IMAGE_TAG
+                    echo "Deployed Blue environment with IMAGE_TAG=${env.BLUE_IMAGE_TAG}"
+                }
+            }
+        }
+        stage('Test Blue Deployment') {
+            steps {
+                sh 'curl -f http://localhost:3001 || exit 1'
+            }
+        }
+        stage('Deploy to Green env') {
+            steps {
+                script {
+                    // Update Green only if Blue testing passed
+                    echo "Deploying Blue's IMAGE_TAG=${env.BLUE_IMAGE_TAG} to Green environment."
+                    sh 'docker compose stop green || true'
+                    sh 'docker compose rm -f green || true'
+                    sh "IMAGE_TAG=${env.PREVIOUS_GREEN_IMAGE_TAG} docker compose -f docker-compose.green.yml up -d green"
+                    
+                    echo "Green environment is now running IMAGE_TAG=${env.PREVIOUS_GREEN_IMAGE_TAG}"
+                }
+            }
+        }
+    }
+    post {
+        always {
+            script {
+                // Final environment status
+                echo "Final Blue Environment running IMAGE_TAG=${env.BLUE_IMAGE_TAG}"
+                echo "Final Green Environment running IMAGE_TAG=${env.GREEN_IMAGE_TAG}"
+            }
+        }
+        failure {
+            script {
+                // If deployment fails, log rollback information
+                echo "Deployment failed. Green remains on previous IMAGE_TAG=${env.PREVIOUS_GREEN_IMAGE_TAG}"
+            }
+        }
+    }
+}
